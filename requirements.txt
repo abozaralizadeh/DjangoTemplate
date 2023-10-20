@@ -1,0 +1,11 @@
+asgiref
+Django
+pytz
+sqlparse
+celery
+redis
+psycopg2-binary
+#django-jet-new
+#django-jet
+django-jet-4
+requests
