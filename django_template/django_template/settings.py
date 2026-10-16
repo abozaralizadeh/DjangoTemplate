@@ -10,23 +10,59 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+def env_bool(name, default):
+    """Read a boolean environment variable: true/false, 1/0 or yes/no, in any case."""
+    value = os.environ.get(name, '').strip().lower()
+    if not value:
+        return default
+    if value in ('true', '1', 'yes'):
+        return True
+    if value in ('false', '0', 'no'):
+        return False
+    raise ImproperlyConfigured(
+        f'{name} must be true/false, 1/0 or yes/no (any case), not {os.environ[name]!r}.'
+    )
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-u98rpy+o&!_+x6pacq&m0vb-^)y%^*5^9e4#c_a^%2vs+&f!sl'
+
+# Security settings, read from environment variables (listed in CLAUDE.md).
+# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+# With none set, the project runs as a local development setup: DEBUG on, a development-only
+# SECRET_KEY and every host allowed. DEBUG off (DJANGO_DEBUG=false) requires DJANGO_SECRET_KEY.
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DJANGO_DEBUG', default=True)
 
-ALLOWED_HOSTS = ['*']
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY is not set, and it is required when DEBUG is off '
+            '(DJANGO_DEBUG=false). Generate a key with: python -c "from '
+            'django.core.management.utils import get_random_secret_key; '
+            'print(get_random_secret_key())" and pass it in the environment. '
+            'For local development, leave DJANGO_DEBUG unset or set it to true.'
+        )
+    # Public and fixed: only for local development with DEBUG on.
+    SECRET_KEY = 'django-insecure-development-only-key-do-not-use-in-production'
+
+# Comma-separated, e.g. DJANGO_ALLOWED_HOSTS=example.com,www.example.com
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
+    if host.strip()
+]
+if not ALLOWED_HOSTS and DEBUG:
+    ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -125,7 +161,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Celery
 
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL') or 'redis://127.0.0.1:6379/0'
 CELERY_IMPORTS = ['django_template.tasks',]
 CELERY_BEAT_SCHEDULE = {
     'printHello': {
